@@ -30,6 +30,9 @@ Application (FR) pour surveiller la sécurité d'une grand-mère âgée à risqu
 - Bouton "Appeler Mamie" (carte) + champ `mamie_phone` (Réglages).
 - Demande de photo : dashboard demande → Mamie Accepter/Refuser → caméra → upload Object Storage → affichage dashboard.
 - Détection de bruit V1 (niveau sonore, expo-audio) activable dans Réglages (build natif requis).
+### 2026-09-23 — Itération 3
+- **Check-in insistant** : quand un check-in est dû, écran plein « Tout va bien, Mamie ? » qui **sonne + vibre en boucle** (`useInsistentAlarm`) jusqu'au tap « Oui, tout va bien » ; après ~20 sonneries sans réponse → alerte urgente + appel automatique du 1ᵉʳ contact. Le minuteur se réarme à chaque interaction (coucher/douche/SOS/confirmation).
+- **Bruits précis** : `SoundMonitor` classe désormais eau/douche (bruit steady medium, ignoré), bruit fort inhabituel (moyen) et bruit violent cri/chute (dangereux) via niveau + variance sur fenêtre glissante.
 
 ## Backlog (prioritized)
 ### P0

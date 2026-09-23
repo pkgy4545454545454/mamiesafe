@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Linking, Platform, Pressable, Text, Vibration, View } from "react-native";
+import { Linking, Platform, Pressable, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { CheckCircle, Drop, Ear, Moon, Phone, Warning, X } from "phosphor-react-native";
@@ -25,6 +25,7 @@ import { sendHeartbeat } from "@/src/notifications";
 import { sendSmsToContacts } from "@/src/sms";
 import { PhotoRequestModal } from "@/src/components/PhotoRequestModal";
 import { SoundMonitor } from "@/src/components/SoundMonitor";
+import { useInsistentAlarm } from "@/src/hooks/useInsistentAlarm";
 import { fonts, makeStyles, sizes, spacing, useTheme } from "@/src/theme";
 
 type Pending = { mode: "sos" | "fall"; seconds: number } | null;
@@ -59,6 +60,14 @@ export default function Mamie() {
   const [pending, setPending] = useState<Pending>(null);
   const pendingRef = useRef<Pending>(null);
   pendingRef.current = pending;
+
+  const [checkinActive, setCheckinActive] = useState(false);
+  const lastCheckAt = useRef(Date.now());
+  const ringCount = useRef(0);
+  const escalatedRef = useRef(false);
+  const touch = useCallback(() => {
+    lastCheckAt.current = Date.now();
+  }, []);
 
   const emergencyNumber = config?.emergency_number ?? "112";
   const sensitivity = config?.fall_sensitivity ?? "moyenne";
@@ -102,8 +111,9 @@ export default function Mamie() {
 
   const startSos = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    touch();
     setPending({ mode: "sos", seconds: 5 });
-  }, []);
+  }, [touch]);
 
   const onFall = useCallback(() => {
     if (pendingRef.current) return;
@@ -115,12 +125,14 @@ export default function Mamie() {
 
   const onBedtime = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    touch();
     createEvent.mutate({ type: "bedtime", note: "Bonne nuit" });
     toast("Bonne nuit 🌙 C'est bien noté.", "success");
-  }, [createEvent, toast]);
+  }, [createEvent, toast, touch]);
 
   const onShower = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    touch();
     createActivity.mutate({
       title: "Douche",
       kind: "shower",
@@ -129,7 +141,7 @@ export default function Mamie() {
       grace_minutes: 5,
     });
     toast("Bonne douche 🚿 Je préviens la famille.", "info");
-  }, [createActivity, toast]);
+  }, [createActivity, toast, touch]);
 
   const onSmsContacts = useCallback(() => {
     sendSmsToContacts(
@@ -145,17 +157,57 @@ export default function Mamie() {
   const confirmDone = useCallback(() => {
     if (!activePrompt) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    if (Platform.OS !== "web") Vibration.cancel();
+    lastCheckAt.current = Date.now();
     confirmActivity.mutate({ id: activePrompt.id, status: "confirmed" });
     toast("Merci ! C'est bien noté ✅", "success");
   }, [activePrompt, confirmActivity, toast]);
 
-  // Ring / vibrate in a loop while an activity awaits Mamie's confirmation.
+  // Insistent alarm (ring + vibrate) while a check-in or activity awaits.
+  useInsistentAlarm(checkinActive || !!activePrompt);
+
+  const intervalMs = Math.max(1, config?.checkin_interval_hours ?? 4) * 3600 * 1000;
+
+  // Detect when a check-in is due (foreground, app open on Mamie's phone).
   useEffect(() => {
-    if (Platform.OS === "web" || !activePrompt) return;
-    Vibration.vibrate([0, 700, 500, 700], true);
-    return () => Vibration.cancel();
-  }, [activePrompt]);
+    const id = setInterval(() => {
+      if (pendingRef.current || pendingPhoto || activePrompt || checkinActive) return;
+      if (Date.now() - lastCheckAt.current >= intervalMs) setCheckinActive(true);
+    }, 15000);
+    return () => clearInterval(id);
+  }, [intervalMs, pendingPhoto, activePrompt, checkinActive]);
+
+  // Count rings; escalate after ~20 rings (~1 min) without response.
+  useEffect(() => {
+    if (!checkinActive) {
+      ringCount.current = 0;
+      escalatedRef.current = false;
+      return;
+    }
+    const id = setInterval(() => {
+      ringCount.current += 1;
+      if (ringCount.current >= 20 && !escalatedRef.current) {
+        escalatedRef.current = true;
+        createAlert.mutate({
+          kind: "missed_checkin",
+          severity: "dangereux",
+          message: "Mamie ne répond pas au check-in.",
+        });
+        const num = contacts.find((c) => c.primary)?.phone || contacts[0]?.phone || emergencyNumber;
+        if (Platform.OS !== "web" && num) Linking.openURL(`tel:${num}`).catch(() => {});
+      }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [checkinActive, createAlert, contacts, emergencyNumber]);
+
+  const onCheckinOk = useCallback(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    lastCheckAt.current = Date.now();
+    ringCount.current = 0;
+    escalatedRef.current = false;
+    setCheckinActive(false);
+    createEvent.mutate({ type: "checkin", note: "Tout va bien" });
+    toast("Merci ! Content que tout aille bien 💛", "success");
+  }, [createEvent, toast]);
 
   // --- Voice (web / native build) -----------------------------------------
   const voice = useVoiceCommand({ onSOS: startSos, onBedtime });
@@ -172,6 +224,7 @@ export default function Mamie() {
   const cancelPending = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     setPending(null);
+    lastCheckAt.current = Date.now();
     if (pendingRef.current?.mode === "fall") {
       createEvent.mutate({ type: "checkin", note: "Tout va bien après détection" });
       toast("Parfait, contente que tout aille bien !", "success");
@@ -241,6 +294,23 @@ export default function Mamie() {
         <View style={[styles.voiceHint, { bottom: insets.bottom + spacing.sm }]}>
           <Text style={styles.voiceHintText}>Vous pouvez aussi dire « à l'aide »</Text>
         </View>
+      )}
+
+      {/* Insistent check-in overlay */}
+      {checkinActive && !pending && !pendingPhoto && (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.overlay} testID="checkin-overlay">
+          <View style={styles.overlayCard}>
+            <Text style={styles.overlayTitle}>Tout va bien, Mamie ?</Text>
+            <Text style={styles.overlaySub}>Appuyez sur le bouton pour dire que tout va bien.</Text>
+            <Pressable
+              testID="checkin-ok-button"
+              onPress={onCheckinOk}
+              style={({ pressed }) => [styles.okButton, { opacity: pressed ? 0.9 : 1 }]}
+            >
+              <Text style={[styles.okLabel, { color: colors.onSuccess }]}>Oui, tout va bien</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
       )}
 
       {/* Countdown overlay */}

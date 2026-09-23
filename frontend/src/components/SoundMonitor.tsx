@@ -18,7 +18,7 @@ type Props = {
 // V1 reacts to sustained loud sound. Requires a native build to run.
 export function SoundMonitor({ enabled, onNoise }: Props) {
   const recorder = useAudioRecorder({ ...RecordingPresets.LOW_QUALITY, isMeteringEnabled: true });
-  const loudStreak = useRef(0);
+  const samples = useRef<number[]>([]);
   const lastAlertAt = useRef(0);
   const onNoiseRef = useRef(onNoise);
   onNoiseRef.current = onNoise;
@@ -41,20 +41,32 @@ export function SoundMonitor({ enabled, onNoise }: Props) {
             const status = recorder.getStatus();
             const m = status?.metering;
             if (typeof m !== "number") return;
-            // metering: ~ -160 (silence) .. 0 (max loudness)
-            if (m > -12) {
-              loudStreak.current += 1;
-            } else if (m > -22) {
-              loudStreak.current += 0.5;
-            } else {
-              loudStreak.current = 0;
-            }
+
+            // rolling window (~21s at 1.5s/tick). metering: -160 (silence) .. 0 (loud)
+            const buf = samples.current;
+            buf.push(m);
+            if (buf.length > 14) buf.shift();
+
             const now = Date.now();
-            if (loudStreak.current >= 3 && now - lastAlertAt.current > 60000) {
+            const cooldown = now - lastAlertAt.current < 60000;
+
+            // Steady medium noise, low variance = running water / shower -> NO alert
+            const recent = buf.slice(-8);
+            const inWaterBand = recent.length >= 8 && recent.every((v) => v > -32 && v < -13);
+            const mean = recent.reduce((a, b) => a + b, 0) / (recent.length || 1);
+            const variance = recent.reduce((a, b) => a + (b - mean) ** 2, 0) / (recent.length || 1);
+            if (inWaterBand && variance < 8) {
+              return; // douche / eau : bruit habituel, pas d'alerte
+            }
+            if (cooldown) return;
+
+            if (m > -6) {
+              // cri / impact soudain et très fort -> danger
               lastAlertAt.current = now;
-              loudStreak.current = 0;
-              const severity: Severity = m > -6 ? "dangereux" : "moyen";
-              onNoiseRef.current(severity, m > -6 ? "Bruit fort et soudain" : "Bruit inhabituel");
+              onNoiseRef.current("dangereux", "Bruit violent (cri ou chute possible)");
+            } else if (m > -13) {
+              lastAlertAt.current = now;
+              onNoiseRef.current("moyen", "Bruit fort inhabituel");
             }
           } catch {
             // ignore per-tick errors
