@@ -35,6 +35,11 @@ export default function SettingsContacts() {
   const [sensitivity, setSensitivity] = useState<(typeof SENSITIVITY)[number]["key"]>("moyenne");
   const [interval, setInterval] = useState(4);
   const [sound, setSound] = useState(false);
+  const [nightMode, setNightMode] = useState(true);
+  const [nightStart, setNightStart] = useState("22");
+  const [nightEnd, setNightEnd] = useState("7");
+  const [inactivityWatch, setInactivityWatch] = useState(true);
+  const [inactivityHours, setInactivityHours] = useState("4");
   const [pin, setPin] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [newName, setNewName] = useState("");
@@ -48,6 +53,11 @@ export default function SettingsContacts() {
     setSensitivity(config.fall_sensitivity);
     setInterval(config.checkin_interval_hours);
     setSound(config.sound_detection ?? false);
+    setNightMode(config.night_mode ?? true);
+    setNightStart(String(config.night_start ?? 22));
+    setNightEnd(String(config.night_end ?? 7));
+    setInactivityWatch(config.inactivity_watch ?? true);
+    setInactivityHours(String(config.inactivity_hours ?? 4));
     setPin(config.dashboard_pin);
     setContacts(config.contacts ?? []);
   }, [config]);
@@ -73,6 +83,11 @@ export default function SettingsContacts() {
         fall_sensitivity: sensitivity,
         checkin_interval_hours: interval,
         sound_detection: sound,
+        night_mode: nightMode,
+        night_start: parseInt(nightStart, 10) || 22,
+        night_end: parseInt(nightEnd, 10) || 7,
+        inactivity_watch: inactivityWatch,
+        inactivity_hours: parseInt(inactivityHours, 10) || 4,
         dashboard_pin: pin.trim() || "1234",
         contacts,
       },
@@ -203,6 +218,85 @@ export default function SettingsContacts() {
             </Pressable>
           </View>
           <Text style={styles.hint}>Fonctionne uniquement sur l'app installée (build), pas dans l'aperçu.</Text>
+        </View>
+
+        {/* Night mode */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Mode nuit (moins d'alertes de bruit)</Text>
+          <View style={styles.segment}>
+            <Pressable
+              testID="night-off"
+              onPress={() => setNightMode(false)}
+              style={[styles.segItem, { backgroundColor: !nightMode ? colors.brandPrimary : colors.surfaceSecondary }]}
+            >
+              <Text style={[styles.segText, { color: !nightMode ? colors.onBrandPrimary : colors.onSurface }]}>Désactivé</Text>
+            </Pressable>
+            <Pressable
+              testID="night-on"
+              onPress={() => setNightMode(true)}
+              style={[styles.segItem, { backgroundColor: nightMode ? colors.brandPrimary : colors.surfaceSecondary }]}
+            >
+              <Text style={[styles.segText, { color: nightMode ? colors.onBrandPrimary : colors.onSurface }]}>Activé</Text>
+            </Pressable>
+          </View>
+          <View style={styles.rowInputs}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.smallLabel}>Début (h)</Text>
+              <TextInput
+                testID="night-start"
+                value={nightStart}
+                onChangeText={(t) => setNightStart(t.replace(/[^0-9]/g, "").slice(0, 2))}
+                keyboardType="number-pad"
+                placeholder="22"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.smallLabel}>Fin (h)</Text>
+              <TextInput
+                testID="night-end"
+                value={nightEnd}
+                onChangeText={(t) => setNightEnd(t.replace(/[^0-9]/g, "").slice(0, 2))}
+                keyboardType="number-pad"
+                placeholder="7"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Anti-silence watch */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Réveil anti-silence (aucun mouvement)</Text>
+          <View style={styles.segment}>
+            <Pressable
+              testID="inactivity-off"
+              onPress={() => setInactivityWatch(false)}
+              style={[styles.segItem, { backgroundColor: !inactivityWatch ? colors.brandPrimary : colors.surfaceSecondary }]}
+            >
+              <Text style={[styles.segText, { color: !inactivityWatch ? colors.onBrandPrimary : colors.onSurface }]}>Désactivé</Text>
+            </Pressable>
+            <Pressable
+              testID="inactivity-on"
+              onPress={() => setInactivityWatch(true)}
+              style={[styles.segItem, { backgroundColor: inactivityWatch ? colors.brandPrimary : colors.surfaceSecondary }]}
+            >
+              <Text style={[styles.segText, { color: inactivityWatch ? colors.onBrandPrimary : colors.onSurface }]}>Activé</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.label}>Alerter après (heures sans mouvement)</Text>
+          <TextInput
+            testID="inactivity-hours"
+            value={inactivityHours}
+            onChangeText={(t) => setInactivityHours(t.replace(/[^0-9]/g, "").slice(0, 2))}
+            keyboardType="number-pad"
+            placeholder="4"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+          />
+          <Text style={styles.hint}>Le jour uniquement (la nuit est ignorée). Nécessite l'app installée.</Text>
         </View>
 
         {/* PIN */}

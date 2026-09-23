@@ -10,18 +10,21 @@ import { Severity } from "@/src/api";
 
 type Props = {
   enabled: boolean;
+  night?: boolean;
   onNoise: (severity: Severity, label: string) => void;
 };
 
 // V1 sound-level monitor (foreground). Classifies loudness from mic metering.
 // Full "shower vs scream vs fall" classification needs a native ML build; this
 // V1 reacts to sustained loud sound. Requires a native build to run.
-export function SoundMonitor({ enabled, onNoise }: Props) {
+export function SoundMonitor({ enabled, night, onNoise }: Props) {
   const recorder = useAudioRecorder({ ...RecordingPresets.LOW_QUALITY, isMeteringEnabled: true });
   const samples = useRef<number[]>([]);
   const lastAlertAt = useRef(0);
   const onNoiseRef = useRef(onNoise);
   onNoiseRef.current = onNoise;
+  const nightRef = useRef(!!night);
+  nightRef.current = !!night;
 
   useEffect(() => {
     if (!enabled) return;
@@ -60,11 +63,13 @@ export function SoundMonitor({ enabled, onNoise }: Props) {
             }
             if (cooldown) return;
 
-            if (m > -6) {
+            const isNight = nightRef.current;
+            if (m > (isNight ? -3 : -6)) {
               // cri / impact soudain et très fort -> danger
               lastAlertAt.current = now;
-              onNoiseRef.current("dangereux", "Bruit violent (cri ou chute possible)");
-            } else if (m > -13) {
+              onNoiseRef.current("dangereux", isNight ? "Bruit violent la nuit" : "Bruit violent (cri ou chute possible)");
+            } else if (!isNight && m > -13) {
+              // bruit fort inhabituel (ignoré la nuit pour éviter les fausses alertes)
               lastAlertAt.current = now;
               onNoiseRef.current("moyen", "Bruit fort inhabituel");
             }

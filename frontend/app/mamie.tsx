@@ -26,6 +26,7 @@ import { sendSmsToContacts } from "@/src/sms";
 import { PhotoRequestModal } from "@/src/components/PhotoRequestModal";
 import { SoundMonitor } from "@/src/components/SoundMonitor";
 import { useInsistentAlarm } from "@/src/hooks/useInsistentAlarm";
+import { useInactivityWatch } from "@/src/hooks/useInactivityWatch";
 import { fonts, makeStyles, sizes, spacing, useTheme } from "@/src/theme";
 
 type Pending = { mode: "sos" | "fall"; seconds: number } | null;
@@ -209,6 +210,27 @@ export default function Mamie() {
     toast("Merci ! Content que tout aille bien 💛", "success");
   }, [createEvent, toast]);
 
+  // Night mode: quieter noise thresholds during sleeping hours.
+  const nightStart = config?.night_start ?? 22;
+  const nightEnd = config?.night_end ?? 7;
+  const hourNow = new Date().getHours();
+  const inNightWindow =
+    nightStart <= nightEnd
+      ? hourNow >= nightStart && hourNow < nightEnd
+      : hourNow >= nightStart || hourNow < nightEnd;
+  const isNight = (config?.night_mode ?? true) && inNightWindow;
+
+  // Anti-silence watch: no movement + no interaction during the day -> check-in.
+  const inactivityMs = Math.max(1, config?.inactivity_hours ?? 4) * 3600 * 1000;
+  const onSilence = useCallback(() => setCheckinActive(true), []);
+  useInactivityWatch({
+    enabled: (config?.inactivity_watch ?? true) && Platform.OS !== "web",
+    isNight,
+    interactionRef: lastCheckAt,
+    inactivityMs,
+    onSilence,
+  });
+
   // --- Voice (web / native build) -----------------------------------------
   const voice = useVoiceCommand({ onSOS: startSos, onBedtime });
   useEffect(() => {
@@ -245,7 +267,11 @@ export default function Mamie() {
       >
         <Ear size={22} color={colors.brandPrimary} weight="fill" />
         <Text style={styles.headerText}>
-          {voice.supported ? "À l'écoute — tout va bien" : "Protection active"}
+          {isNight
+            ? "Mode nuit 🌙 — protection active"
+            : voice.supported
+              ? "À l'écoute — tout va bien"
+              : "Protection active"}
         </Text>
       </Pressable>
 
@@ -372,7 +398,7 @@ export default function Mamie() {
       )}
 
       {/* Sound-level monitor (native build only) */}
-      <SoundMonitor enabled={soundEnabled} onNoise={onNoise} />
+      <SoundMonitor enabled={soundEnabled} night={isNight} onNoise={onNoise} />
     </View>
   );
 }

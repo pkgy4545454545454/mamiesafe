@@ -53,6 +53,11 @@ class Config(BaseModel):
     checkin_interval_hours: int = 4
     dashboard_pin: str = "1234"
     sound_detection: bool = False
+    night_mode: bool = True
+    night_start: int = 22
+    night_end: int = 7
+    inactivity_watch: bool = True
+    inactivity_hours: int = 4
     updated_at: str = Field(default_factory=now_iso)
 
 
@@ -65,6 +70,11 @@ class ConfigUpdate(BaseModel):
     checkin_interval_hours: Optional[int] = None
     dashboard_pin: Optional[str] = None
     sound_detection: Optional[bool] = None
+    night_mode: Optional[bool] = None
+    night_start: Optional[int] = None
+    night_end: Optional[int] = None
+    inactivity_watch: Optional[bool] = None
+    inactivity_hours: Optional[int] = None
 
 
 class Event(BaseModel):

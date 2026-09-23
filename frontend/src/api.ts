@@ -21,6 +21,11 @@ export type Config = {
   checkin_interval_hours: number;
   dashboard_pin: string;
   sound_detection: boolean;
+  night_mode: boolean;
+  night_start: number;
+  night_end: number;
+  inactivity_watch: boolean;
+  inactivity_hours: number;
   updated_at: string;
 };
 

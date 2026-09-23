@@ -33,6 +33,9 @@ Application (FR) pour surveiller la sécurité d'une grand-mère âgée à risqu
 ### 2026-09-23 — Itération 3
 - **Check-in insistant** : quand un check-in est dû, écran plein « Tout va bien, Mamie ? » qui **sonne + vibre en boucle** (`useInsistentAlarm`) jusqu'au tap « Oui, tout va bien » ; après ~20 sonneries sans réponse → alerte urgente + appel automatique du 1ᵉʳ contact. Le minuteur se réarme à chaque interaction (coucher/douche/SOS/confirmation).
 - **Bruits précis** : `SoundMonitor` classe désormais eau/douche (bruit steady medium, ignoré), bruit fort inhabituel (moyen) et bruit violent cri/chute (dangereux) via niveau + variance sur fenêtre glissante.
+### 2026-09-23 — Itération 4
+- **Mode nuit** : pendant la fenêtre nuit (défaut 22h–7h, réglable), la détection de bruit devient moins sensible (seul un bruit très violent alerte, le « fort inhabituel » est ignoré). En-tête Mamie affiche « Mode nuit 🌙 ». Config: `night_mode`, `night_start`, `night_end`.
+- **Réveil anti-silence** : `useInactivityWatch` suit le mouvement (accéléromètre) + les interactions ; si aucun mouvement ET aucune interaction pendant X heures **le jour** (nuit ignorée), déclenche le check-in insistant (qui escalade en alerte + appel si pas de réponse). Config: `inactivity_watch`, `inactivity_hours`.
 
 ## Backlog (prioritized)
 ### P0
