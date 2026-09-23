@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Platform } from "react-native";
 
 import { API_BASE } from "@/src/config";
 
@@ -14,10 +15,12 @@ export type Config = {
   id: string;
   mamie_name: string;
   emergency_number: string;
+  mamie_phone: string;
   contacts: Contact[];
   fall_sensitivity: "basse" | "moyenne" | "haute";
   checkin_interval_hours: number;
   dashboard_pin: string;
+  sound_detection: boolean;
   updated_at: string;
 };
 
@@ -169,4 +172,114 @@ export function useSummary() {
     queryFn: () => api<Summary>("/dashboard/summary"),
     refetchInterval: 8000,
   });
+}
+
+// ---- Activities -----------------------------------------------------------
+export type ActivityStatus =
+  | "scheduled"
+  | "awaiting_confirmation"
+  | "confirmed"
+  | "escalated"
+  | "cancelled";
+
+export type Activity = {
+  id: string;
+  title: string;
+  kind: "activity" | "shower";
+  start_at: string;
+  end_at: string;
+  grace_minutes: number;
+  status: ActivityStatus;
+  awaiting_since: string | null;
+  confirmed_at: string | null;
+  created_at: string;
+};
+
+export function useActivities(status?: string) {
+  return useQuery({
+    queryKey: ["activities", status ?? "all"],
+    queryFn: () => api<Activity[]>(`/activities${status ? `?status=${status}` : ""}`),
+    refetchInterval: 10000,
+  });
+}
+
+export function useCreateActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      title: string;
+      kind?: "activity" | "shower";
+      start_at: string;
+      end_at: string;
+      grace_minutes?: number;
+    }) => api<Activity>("/activities", { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["activities"] }),
+  });
+}
+
+export function useConfirmActivity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "confirmed" | "cancelled" }) =>
+      api<Activity>(`/activities/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["activities"] });
+      qc.invalidateQueries({ queryKey: ["alerts"] });
+    },
+  });
+}
+
+// ---- Photo requests -------------------------------------------------------
+export type PhotoRequest = {
+  id: string;
+  status: "pending" | "accepted" | "refused" | "fulfilled" | "cancelled";
+  photo_path: string | null;
+  created_at: string;
+  fulfilled_at: string | null;
+};
+
+export function photoUrl(reqId: string) {
+  return `${API_BASE}/photos/${reqId}`;
+}
+
+export function usePhotoRequests(status?: string) {
+  return useQuery({
+    queryKey: ["photo-requests", status ?? "all"],
+    queryFn: () => api<PhotoRequest[]>(`/photo-requests${status ? `?status=${status}` : ""}`),
+    refetchInterval: 5000,
+  });
+}
+
+export function useCreatePhotoRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<PhotoRequest>("/photo-requests", { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["photo-requests"] }),
+  });
+}
+
+export function useUpdatePhotoRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "accepted" | "refused" | "cancelled" }) =>
+      api<PhotoRequest>(`/photo-requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["photo-requests"] }),
+  });
+}
+
+export async function uploadPhoto(reqId: string, uri: string) {
+  const form = new FormData();
+  if (Platform.OS === "web") {
+    const blob = await (await fetch(uri)).blob();
+    form.append("file", blob, "photo.jpg");
+  } else {
+    // native multipart file shape
+    form.append("file", { uri, name: "photo.jpg", type: "image/jpeg" } as any);
+  }
+  const res = await fetch(`${API_BASE}/photo-requests/${reqId}/photo`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) throw new Error("upload failed");
+  return res.json();
 }

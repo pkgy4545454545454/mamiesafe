@@ -31,8 +31,10 @@ export default function SettingsContacts() {
 
   const [name, setName] = useState("");
   const [emergency, setEmergency] = useState("");
+  const [mamiePhone, setMamiePhone] = useState("");
   const [sensitivity, setSensitivity] = useState<(typeof SENSITIVITY)[number]["key"]>("moyenne");
   const [interval, setInterval] = useState(4);
+  const [sound, setSound] = useState(false);
   const [pin, setPin] = useState("");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [newName, setNewName] = useState("");
@@ -42,8 +44,10 @@ export default function SettingsContacts() {
     if (!config) return;
     setName(config.mamie_name);
     setEmergency(config.emergency_number);
+    setMamiePhone(config.mamie_phone ?? "");
     setSensitivity(config.fall_sensitivity);
     setInterval(config.checkin_interval_hours);
+    setSound(config.sound_detection ?? false);
     setPin(config.dashboard_pin);
     setContacts(config.contacts ?? []);
   }, [config]);
@@ -65,8 +69,10 @@ export default function SettingsContacts() {
       {
         mamie_name: name.trim() || "Mamie",
         emergency_number: emergency.trim() || "112",
+        mamie_phone: mamiePhone.trim(),
         fall_sensitivity: sensitivity,
         checkin_interval_hours: interval,
+        sound_detection: sound,
         dashboard_pin: pin.trim() || "1234",
         contacts,
       },
@@ -119,6 +125,19 @@ export default function SettingsContacts() {
           />
         </View>
 
+        <View style={styles.field}>
+          <Text style={styles.label}>Téléphone de Mamie (pour l'appeler)</Text>
+          <TextInput
+            testID="input-mamie-phone"
+            value={mamiePhone}
+            onChangeText={setMamiePhone}
+            keyboardType="phone-pad"
+            placeholder="Ex : 06 12 34 56 78"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+          />
+        </View>
+
         {/* Sensitivity */}
         <View style={styles.field}>
           <Text style={styles.label}>Sensibilité détection de chute</Text>
@@ -162,6 +181,28 @@ export default function SettingsContacts() {
               );
             })}
           </View>
+        </View>
+
+        {/* Sound detection */}
+        <View style={styles.field}>
+          <Text style={styles.label}>Détection de bruit (niveau sonore)</Text>
+          <View style={styles.segment}>
+            <Pressable
+              testID="sound-off"
+              onPress={() => setSound(false)}
+              style={[styles.segItem, { backgroundColor: !sound ? colors.brandPrimary : colors.surfaceSecondary }]}
+            >
+              <Text style={[styles.segText, { color: !sound ? colors.onBrandPrimary : colors.onSurface }]}>Désactivée</Text>
+            </Pressable>
+            <Pressable
+              testID="sound-on"
+              onPress={() => setSound(true)}
+              style={[styles.segItem, { backgroundColor: sound ? colors.brandPrimary : colors.surfaceSecondary }]}
+            >
+              <Text style={[styles.segText, { color: sound ? colors.onBrandPrimary : colors.onSurface }]}>Activée</Text>
+            </Pressable>
+          </View>
+          <Text style={styles.hint}>Fonctionne uniquement sur l'app installée (build), pas dans l'aperçu.</Text>
         </View>
 
         {/* PIN */}

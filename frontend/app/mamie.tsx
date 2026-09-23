@@ -1,18 +1,30 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Linking, Platform, Pressable, Text, View } from "react-native";
+import { Linking, Platform, Pressable, Text, Vibration, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ear, Moon, Phone, Warning, X } from "phosphor-react-native";
+import { CheckCircle, Drop, Ear, Moon, Phone, Warning, X } from "phosphor-react-native";
 
-import { useConfig, useCreateAlert, useCreateEvent } from "@/src/api";
+import {
+  useActivities,
+  useConfig,
+  useConfirmActivity,
+  useCreateActivity,
+  useCreateAlert,
+  useCreateEvent,
+  usePhotoRequests,
+  type Severity,
+} from "@/src/api";
 import { ESCALATION_SECONDS } from "@/src/config";
 import { useFallDetection } from "@/src/hooks/useFallDetection";
 import { useVoiceCommand } from "@/src/hooks/useVoiceCommand";
 import { useLocationSharing } from "@/src/hooks/useLocationSharing";
 import { useToast } from "@/src/components/Toast";
 import { sendHeartbeat } from "@/src/notifications";
+import { sendSmsToContacts } from "@/src/sms";
+import { PhotoRequestModal } from "@/src/components/PhotoRequestModal";
+import { SoundMonitor } from "@/src/components/SoundMonitor";
 import { fonts, makeStyles, sizes, spacing, useTheme } from "@/src/theme";
 
 type Pending = { mode: "sos" | "fall"; seconds: number } | null;
@@ -27,6 +39,22 @@ export default function Mamie() {
   const { data: config } = useConfig();
   const createEvent = useCreateEvent();
   const createAlert = useCreateAlert();
+  const createActivity = useCreateActivity();
+  const confirmActivity = useConfirmActivity();
+  const { data: awaiting } = useActivities("awaiting_confirmation");
+  const contacts = config?.contacts ?? [];
+
+  const { data: photoReqs } = usePhotoRequests("pending");
+  const [dismissedPhoto, setDismissedPhoto] = useState<string[]>([]);
+  const pendingPhoto = (photoReqs ?? []).find((p) => !dismissedPhoto.includes(p.id));
+
+  const soundEnabled = !!config?.sound_detection && Platform.OS !== "web";
+  const onNoise = useCallback(
+    (severity: Severity, label: string) => {
+      createAlert.mutate({ kind: "noise", severity, message: label });
+    },
+    [createAlert],
+  );
 
   const [pending, setPending] = useState<Pending>(null);
   const pendingRef = useRef<Pending>(null);
@@ -54,6 +82,10 @@ export default function Mamie() {
       if (mode === "sos") {
         createEvent.mutate({ type: "sos", note: "SOS déclenché" });
         createAlert.mutate({ kind: "sos", severity: "dangereux", message: "Mamie a demandé de l'aide." });
+        sendSmsToContacts(
+          contacts,
+          `${config?.mamie_name ?? "Mamie"} a besoin d'aide ! Merci de la contacter ou de passer la voir.`,
+        );
       } else {
         createEvent.mutate({ type: "fall", note: "Chute détectée, pas de réponse" });
         createAlert.mutate({ kind: "fall", severity: "dangereux", message: "Chute possible, aucune réponse de Mamie." });
@@ -66,7 +98,7 @@ export default function Mamie() {
       setPending((p) => (p ? { ...p, seconds: p.seconds - 1 } : p));
     }, 1000);
     return () => clearTimeout(t);
-  }, [pending, callEmergency, createAlert, createEvent]);
+  }, [pending, callEmergency, createAlert, createEvent, contacts, config]);
 
   const startSos = useCallback(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
@@ -86,6 +118,44 @@ export default function Mamie() {
     createEvent.mutate({ type: "bedtime", note: "Bonne nuit" });
     toast("Bonne nuit 🌙 C'est bien noté.", "success");
   }, [createEvent, toast]);
+
+  const onShower = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    createActivity.mutate({
+      title: "Douche",
+      kind: "shower",
+      start_at: new Date().toISOString(),
+      end_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      grace_minutes: 5,
+    });
+    toast("Bonne douche 🚿 Je préviens la famille.", "info");
+  }, [createActivity, toast]);
+
+  const onSmsContacts = useCallback(() => {
+    sendSmsToContacts(
+      contacts,
+      `${config?.mamie_name ?? "Mamie"} a besoin d'aide ! Merci de la contacter ou de passer la voir.`,
+    ).then((r) => {
+      if (r === "unavailable") toast("Aucun contact enregistré ou SMS indisponible", "error");
+    });
+  }, [contacts, config, toast]);
+
+  const activePrompt = awaiting && awaiting.length > 0 ? awaiting[0] : null;
+
+  const confirmDone = useCallback(() => {
+    if (!activePrompt) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    if (Platform.OS !== "web") Vibration.cancel();
+    confirmActivity.mutate({ id: activePrompt.id, status: "confirmed" });
+    toast("Merci ! C'est bien noté ✅", "success");
+  }, [activePrompt, confirmActivity, toast]);
+
+  // Ring / vibrate in a loop while an activity awaits Mamie's confirmation.
+  useEffect(() => {
+    if (Platform.OS === "web" || !activePrompt) return;
+    Vibration.vibrate([0, 700, 500, 700], true);
+    return () => Vibration.cancel();
+  }, [activePrompt]);
 
   // --- Voice (web / native build) -----------------------------------------
   const voice = useVoiceCommand({ onSOS: startSos, onBedtime });
@@ -126,14 +196,36 @@ export default function Mamie() {
         </Text>
       </Pressable>
 
+      {/* Persistent urgent confirmation banner (shower / scheduled activity) */}
+      {activePrompt && (
+        <Animated.View entering={FadeIn.duration(200)} style={styles.urgent} testID="activity-prompt-banner">
+          <Text style={styles.urgentTitle}>
+            {activePrompt.kind === "shower" ? "Avez-vous fini votre douche ?" : `Avez-vous fini : ${activePrompt.title} ?`}
+          </Text>
+          <Pressable testID="activity-done-button" onPress={confirmDone} style={styles.urgentButton}>
+            <CheckCircle size={44} color={colors.onSuccess} weight="fill" />
+            <Text style={[styles.urgentButtonText, { color: colors.onSuccess }]}>J'ai fini</Text>
+          </Pressable>
+        </Animated.View>
+      )}
+
       {/* Two giant buttons */}
       <Pressable
         testID="mamie-bedtime-button"
         onPress={onBedtime}
         style={({ pressed }) => [styles.bigButton, styles.bedBtn, { opacity: pressed ? 0.9 : 1 }]}
       >
-        <Moon size={80} color={colors.onSuccess} weight="fill" />
+        <Moon size={64} color={colors.onSuccess} weight="fill" />
         <Text style={[styles.bigLabel, { color: colors.onSuccess }]}>Je me couche</Text>
+      </Pressable>
+
+      <Pressable
+        testID="mamie-shower-button"
+        onPress={onShower}
+        style={({ pressed }) => [styles.bigButton, styles.showerBtn, { opacity: pressed ? 0.9 : 1 }]}
+      >
+        <Drop size={64} color={colors.onInfo} weight="fill" />
+        <Text style={[styles.bigLabel, { color: colors.onInfo }]}>Je me douche</Text>
       </Pressable>
 
       <Pressable
@@ -141,7 +233,7 @@ export default function Mamie() {
         onPress={startSos}
         style={({ pressed }) => [styles.bigButton, styles.sosBtn, { opacity: pressed ? 0.9 : 1 }]}
       >
-        <Warning size={80} color={colors.onError} weight="fill" />
+        <Warning size={64} color={colors.onError} weight="fill" />
         <Text style={[styles.bigLabel, { color: colors.onError }]}>J'ai besoin d'aide</Text>
       </Pressable>
 
@@ -185,14 +277,32 @@ export default function Mamie() {
             </Pressable>
 
             {pending.mode === "sos" && (
-              <Pressable testID="call-now-button" onPress={callEmergency} style={styles.callNow}>
-                <Phone size={22} color={colors.onError} weight="fill" />
-                <Text style={[styles.callNowLabel, { color: colors.onError }]}>Appeler tout de suite</Text>
-              </Pressable>
+              <>
+                <Pressable testID="call-now-button" onPress={callEmergency} style={styles.callNow}>
+                  <Phone size={22} color={colors.onError} weight="fill" />
+                  <Text style={[styles.callNowLabel, { color: colors.onError }]}>Appeler tout de suite</Text>
+                </Pressable>
+                <Pressable testID="sms-contacts-button" onPress={onSmsContacts} style={styles.smsBtn}>
+                  <Text style={[styles.callNowLabel, { color: colors.onBrandPrimary }]}>
+                    Prévenir mes proches (SMS)
+                  </Text>
+                </Pressable>
+              </>
             )}
           </View>
         </Animated.View>
       )}
+
+      {/* Incoming photo request (camera call) */}
+      {pendingPhoto && (
+        <PhotoRequestModal
+          reqId={pendingPhoto.id}
+          onClose={() => setDismissedPhoto((d) => [...d, pendingPhoto.id])}
+        />
+      )}
+
+      {/* Sound-level monitor (native build only) */}
+      <SoundMonitor enabled={soundEnabled} onNoise={onNoise} />
     </View>
   );
 }
@@ -215,8 +325,33 @@ const useStyles = makeStyles((colors) => ({
     gap: spacing.md,
   },
   bedBtn: { backgroundColor: colors.success },
+  showerBtn: { backgroundColor: colors.info },
   sosBtn: { backgroundColor: colors.error },
-  bigLabel: { fontFamily: fonts.display, fontSize: sizes.giant, textAlign: "center" },
+  bigLabel: { fontFamily: fonts.display, fontSize: sizes.huge, textAlign: "center" },
+  urgent: {
+    backgroundColor: colors.error,
+    borderRadius: 24,
+    padding: spacing.lg,
+    gap: spacing.md,
+    alignItems: "center",
+  },
+  urgentTitle: {
+    fontFamily: fonts.display,
+    fontSize: sizes["2xl"],
+    color: colors.onError,
+    textAlign: "center",
+  },
+  urgentButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.success,
+    minHeight: 72,
+    borderRadius: 18,
+    width: "100%",
+  },
+  urgentButtonText: { fontFamily: fonts.display, fontSize: sizes["2xl"] },
   voiceHint: { position: "absolute", alignSelf: "center", paddingVertical: spacing.xs },
   voiceHintText: { fontFamily: fonts.text, fontSize: sizes.base, color: colors.muted },
   overlay: {
@@ -274,4 +409,14 @@ const useStyles = makeStyles((colors) => ({
     width: "100%",
   },
   callNowLabel: { fontFamily: fonts.textBold, fontSize: sizes.lg },
+  smsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.brandPrimary,
+    minHeight: 56,
+    borderRadius: 20,
+    width: "100%",
+  },
 }));

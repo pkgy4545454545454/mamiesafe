@@ -1,54 +1,48 @@
 # MamieSafe — PRD
 
 ## Original problem statement
-Application (FR) pour surveiller la sécurité d'une grand-mère âgée à risque de chute. Elle garde son téléphone sur elle. Besoins : gros boutons ultra simples, bouton SOS, "Je me couche", check-in régulier, détection de chute (accéléromètre, pas trop sensible), détection de bruit, commandes vocales ("à l'aide" = appel), notifications push répétées, dashboard côté famille avec statut temps réel, historique d'alertes (léger/moyen/dangereux), carte GPS (Leaflet/OSM), contacts d'urgence, tutoriel forcé au 1er lancement. Une seule app, 2 modes (Mamie + Dashboard protégé par code), version web incluse.
+Application (FR) pour surveiller la sécurité d'une grand-mère âgée à risque de chute. Elle garde son téléphone sur elle. Besoins : gros boutons ultra simples, SOS, "Je me couche", "Je me douche", check-in régulier, détection de chute (accéléromètre), détection de bruit, commandes vocales ("à l'aide"), notifications push répétées, dashboard famille (statut temps réel, historique d'alertes léger/moyen/dangereux, carte GPS Leaflet/OSM, contacts, appeler Mamie), planification d'activités avec confirmation (piscine/douche), demande de photo (Accepter/Refuser). Une seule app, 2 modes (Mamie + Dashboard PIN), version web.
 
 ## Architecture
-- **Frontend**: Expo (React Native, expo-router), fonctionne mobile + web.
-  - Modes: `app/onboarding.tsx`, `app/mamie.tsx`, `app/unlock.tsx` (PIN), `app/dashboard/*` (tabs: Statut, Alertes, Carte, Réglages).
-  - Thème senior haute lisibilité (`src/theme.ts`, light+dark), Phosphor icons, react-query pour toute la data.
-  - Capteurs/temps réel: `useFallDetection` (expo-sensors), `useLocationSharing` (expo-location), `useVoiceCommand` (web SpeechRecognition + stub natif), `notifications.ts` (expo-notifications local + register push Expo).
+- **Frontend**: Expo (React Native, expo-router), mobile + web.
+  - Modes: `app/onboarding.tsx`, `app/mamie.tsx`, `app/unlock.tsx` (PIN), `app/dashboard/*` (tabs: Statut, Alertes, Carte, Réglages), `app/activities.tsx`.
+  - Thème senior haute lisibilité (`src/theme.ts`), Phosphor icons, react-query.
+  - Capteurs/temps réel: `useFallDetection` (expo-sensors), `useLocationSharing` (expo-location), `useVoiceCommand` (web SpeechRecognition + stub natif), `SoundMonitor` (expo-audio, natif), `PhotoRequestModal` (expo-camera).
   - Carte: `LeafletMap` (WebView Leaflet natif / iframe OSM web).
-- **Backend**: FastAPI + MongoDB (`backend/server.py`), routes `/api/*`, single-household config. Push envoyé côté Python via l'API Expo push (`/api/push/register`).
-- **DB collections**: config (singleton `household`), events, alerts, locations, heartbeats, push_tokens.
+- **Backend**: FastAPI + MongoDB (`backend/server.py`), routes `/api/*`, single-household config.
+  - Background scheduler (`activity_monitor`) : scheduled → awaiting_confirmation → escalated (+ alerte + push).
+  - Push via l'API Expo (Python) : `notify_dashboard` / `notify_mamie`.
+  - Photos: Emergent Managed Object Storage (init/put/get), servies via `/api/photos/{id}`.
+- **DB collections**: config, events, alerts, locations, heartbeats, push_tokens, activities, photo_requests.
 
 ## User personas
-1. **Mamie** (80+, faible vue, tape à peine): 2 gros boutons, tutoriel forcé, commandes vocales, protection passive.
-2. **Aidant/famille** (petit-fils): dashboard code-protégé, statut, alertes, carte, réglages.
+1. **Mamie** (80+): 3 gros boutons, tutoriel forcé, banner de confirmation, photo Accepter/Refuser.
+2. **Aidant** (petit-fils): dashboard PIN, statut, alertes, carte, activités, photo, réglages.
 
-## Core requirements (static)
-- Mode Mamie ultra simple: "Je me couche" + "J'ai besoin d'aide".
-- SOS = compte à rebours 5s annulable → ouvre le dialer d'urgence + crée alerte.
-- Détection de chute → "Ça va ?" 30s → escalade si pas de réponse.
-- Dashboard: statut temps réel, historique alertes par sévérité, carte GPS, contacts, réglages, PIN.
-- Notifications locales (check-in, coucher) + push Python (build de prod).
-
-## Implemented (2026-09-23)
-- ✅ Backend complet (config, events, alerts, location, heartbeat, summary, push register) — 16/16 tests.
-- ✅ Onboarding forcé (5 étapes, exemples de test) + persistance `onboarded`.
-- ✅ Mode Mamie: 2 boutons géants, SOS countdown annulable, bedtime + toast, haptics, accès dashboard par long-press.
-- ✅ Détection de chute (accéléromètre, sensibilité configurable) + overlay d'escalade.
-- ✅ Partage GPS + carte Leaflet/OSM (web + natif).
-- ✅ Commandes vocales web (à l'aide / coucher) + stub natif.
-- ✅ Unlock PIN + Dashboard (4 onglets) avec data live et polling.
-- ✅ Alertes: badges de sévérité, valider / fausse alerte.
-- ✅ Réglages: nom, numéro urgence, sensibilité, intervalle check-in, PIN, contacts.
-- ✅ Notifications locales (check-in + coucher) + enregistrement push Expo côté Python.
+## Implemented
+### 2026-09-23 — MVP
+- Onboarding forcé, mode Mamie (Je me couche / SOS), détection de chute + escalade, GPS + carte, unlock PIN, dashboard (Statut/Alertes/Carte/Réglages), notifications locales, push register.
+### 2026-09-23 — Itération 2
+- Bouton "Je me douche" + activité minutée (15 min) → confirmation.
+- Banner urgent persistant + vibration en boucle tant que non confirmé (bouton "J'ai fini").
+- Planification d'activités (dashboard, ex: piscine 9h-12h) + moteur serveur : awaiting → escalade automatique en alerte urgente.
+- SMS aux contacts en 1 tap sur SOS (expo-sms).
+- Bouton "Appeler Mamie" (carte) + champ `mamie_phone` (Réglages).
+- Demande de photo : dashboard demande → Mamie Accepter/Refuser → caméra → upload Object Storage → affichage dashboard.
+- Détection de bruit V1 (niveau sonore, expo-audio) activable dans Réglages (build natif requis).
 
 ## Backlog (prioritized)
 ### P0
-- Push distant réel (nécessite build + FCM google-services.json fourni par l'utilisateur).
-- Reconnaissance vocale native ("à l'aide") + micro arrière-plan (build natif, module STT).
+- Push distant réel activé au build (FCM google-services.json fourni par l'utilisateur).
+- Reconnaissance vocale native ("à l'aide") — module STT + build.
 ### P1
-- Détection de bruit / classification (douche, cri, silence) via micro (build natif).
-- Sonnerie insistante jusqu'à réponse (répétitions x20) sur check-in manqué → escalade auto.
-- Envoi SMS pré-rempli aux contacts (dialer/SMS composer) depuis SOS.
-- Numéro propre de Mamie + bouton "Appeler Mamie" sur la carte.
+- Classification fine des bruits (douche/cri/chute) via ML embarqué.
+- Ring insistant en arrière-plan (x20) + appel auto d'un contact.
+- Visio temps réel (WebRTC) si souhaité plus tard.
 ### P2
-- Historique de localisation / trajet, géofence "à la maison".
-- Mode nuit auto, réglage taille de police.
+- Historique de localisation, géofence maison, réglage taille de police.
 
 ## Next tasks
-1. Build de prod pour activer push + vocal natif + micro.
-2. Escalade check-in manqué (sonnerie répétée) et SMS contacts.
-3. Détection de bruit embarquée.
+1. Publier + générer build iOS/Android pour push, caméra, micro, vocal.
+2. Ring insistant arrière-plan + appel contact automatique.
+3. Classification des bruits.

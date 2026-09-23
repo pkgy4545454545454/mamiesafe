@@ -1,0 +1,36 @@
+{
+  "summary": "Iteration-2 testing green. Backend: 10/10 pytest passed against public URL (config now includes sound_detection + mamie_phone with PUT persistence; POST/GET/PATCH /api/activities including confirmed→confirmed_at, cancelled, 404; scheduler auto-flip scheduled→awaiting_confirmation observed within ~15s of end_at when polled; POST/GET/PATCH /api/photo-requests including refused + 404; multipart upload to /api/photo-requests/{id}/photo returns fulfilled + photo_path and GET /api/photos/{id} returns image bytes with image/* Content-Type — Emergent object storage integration works). Frontend on mobile viewport 390x844: Mamie home renders THREE giant buttons (mamie-bedtime-button, mamie-shower-button, mamie-sos-button); shower press creates activity and shows 'Bonne douche' toast; after seeding an already-past activity, activity-prompt-banner appears within ~15s and activity-done-button confirms it (banner disappears + 'Merci' success toast); after seeding a pending photo request the photo-request-modal appears with both photo-accept and photo-refuse (refuse closes the modal). Dashboard status: request-photo shows 'Demande envoyée' toast and after uploading a photo via API the latest-photo Image renders; open-activities navigates to /activities. /activities screen: activity-title + activity-add creates 'TEST_UI_Marché' and shows it in the list; activity-cancel buttons are present (3 rows). Dashboard settings: input-mamie-phone persisted to '0611223344', sound-on sets sound_detection=true — both verified via GET /api/config. Dashboard map: map-call-mamie visible and shows 'Appeler Mamie : 0611223344' toast on web (Linking.openURL used on native, correctly gated). No red screens, no error console noise blocking use.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration2.py",
+    "/app/backend/tests/test_mamiesafe_api.py",
+    "/app/test_reports/pytest/iter2_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py activity_monitor is a single asyncio task started at app startup; if uvicorn spawns multiple workers this becomes duplicated. In this env it is single-worker (supervisor) — OK for MVP, but consider a leader lock for production scaling.",
+    "server.py upload_photo uses put_object which re-inits storage on 503 (good). init_storage failure is only logged and swallowed at startup — subsequent uploads will still try to init lazily (good).",
+    "PhotoRequest.status has both 'accepted' and 'fulfilled' — the dashboard uses .some(p.status==='pending'||p.status==='accepted') to show 'En attente' hint (good).",
+    "Activity kind literal is only 'activity'|'shower' — frontend dashboard/activities uses 'activity'; Mamie shower uses 'shower' with a 5-minute grace and 15-minute end_at (matches spec).",
+    "parse_iso safely handles missing/invalid ISO and returns now (good), preventing crash of the monitor loop.",
+    "GET /api/photos/{id} returns 404 if photo_path missing (good).",
+    "Frontend PhotoRequestModal uses expo-camera (CameraView) which is native-only for capture — modal display and refuse path work on web (verified). Capture requires a device build (expected, per review note).",
+    "Frontend dashboard/settings save posts full config including empty mamie_phone / dashboard_pin fallback '1234' — good.",
+    "Frontend map.tsx correctly gates Linking.openURL('tel:') to non-web and shows a toast on web (verified)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration2.py (new)"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% of iteration-2 flows tested on web preview"},
+  "seed_data_creation": "Left in DB: several TEST_* activities (TEST_Piscine, TEST_Confirm confirmed, TEST_Cancel cancelled, TEST_Await* cancelled, TEST_UI_Await confirmed, TEST_UI_Marché scheduled), a real Douche activity from UI test (scheduled), multiple photo requests (some refused, some fulfilled with a 1x1 PNG uploaded to object storage). Config left with mamie_phone=0611223344 and sound_detection=true.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend iteration-2 tests: EXPO_PUBLIC_BACKEND_URL=https://grand-secure.preview.emergentagent.com pytest /app/backend/tests/test_iteration2.py -v. Scheduler test waits up to 45s (activity_monitor runs every 30s). Frontend flows verified on web at 390x844 viewport, PIN 1234 via /unlock. Native-only pieces (camera capture, mic-based SoundMonitor, tel:/sms:, accelerometer/Vibration/Haptics feedback, expo-notifications) are correctly Platform.OS-gated and NOT tested on web — per review note. Latest photo image is displayed via GET /api/photos/{id} which streams from Emergent object storage (works, verified end-to-end).",
+  "rca_of_issue": "N/A — no issues found."
+}

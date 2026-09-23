@@ -14,7 +14,10 @@
         "NSLocationWhenInUseUsageDescription": "Localiser Mamie en cas d'urgence",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Suivre la position de Mamie pour sa sécurité",
         "NSMicrophoneUsageDescription": "Détecter les appels à l'aide et bruits suspects",
-        "UIBackgroundModes": ["location"]
+        "NSCameraUsageDescription": "Envoyer une photo à la famille en cas de besoin",
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -27,6 +30,7 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "RECORD_AUDIO",
+        "CAMERA",
         "VIBRATE"
       ]
     },
@@ -57,7 +61,14 @@
           "locationAlwaysAndWhenInUsePermission": "Suivre la position de Mamie pour sa sécurité"
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-audio",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Envoyer une photo à la famille en cas de besoin"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

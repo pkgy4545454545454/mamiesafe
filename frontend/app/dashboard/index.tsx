@@ -1,9 +1,12 @@
 import { useRouter } from "expo-router";
-import { RefreshControl, ScrollView, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { RefreshControl, ScrollView, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   Bed,
   Bell,
+  CalendarCheck,
+  Camera,
   CheckCircle,
   Ear,
   Pulse,
@@ -11,8 +14,14 @@ import {
   WifiSlash,
 } from "phosphor-react-native";
 
-import { useSummary } from "@/src/api";
+import {
+  photoUrl,
+  useCreatePhotoRequest,
+  usePhotoRequests,
+  useSummary,
+} from "@/src/api";
 import { DashboardHeader } from "@/src/components/DashboardHeader";
+import { useToast } from "@/src/components/Toast";
 import { usesNativeTabs } from "@/src/navigation";
 import { fonts, makeStyles, sizes, spacing, useTheme } from "@/src/theme";
 import { fromNow } from "@/src/time";
@@ -23,6 +32,19 @@ export default function DashboardStatus() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { data, isLoading, refetch, isRefetching } = useSummary();
+  const toast = useToast();
+  const { data: photoReqs } = usePhotoRequests();
+  const requestPhoto = useCreatePhotoRequest();
+
+  const latestPhoto = (photoReqs ?? []).find((p) => p.status === "fulfilled");
+  const photoPending = (photoReqs ?? []).some((p) => p.status === "pending" || p.status === "accepted");
+
+  const askPhoto = () => {
+    requestPhoto.mutate(undefined, {
+      onSuccess: () => toast("Demande envoyée à Mamie 📷", "info"),
+      onError: () => toast("Échec de la demande", "error"),
+    });
+  };
 
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
   const online = data?.status?.online;
@@ -89,6 +111,42 @@ export default function DashboardStatus() {
             <Text style={styles.tileValue}>{data?.status?.listening ? "Active" : "Inactive"}</Text>
           </View>
         </View>
+
+        <Pressable
+          testID="open-activities"
+          onPress={() => router.push("/activities")}
+          style={({ pressed }) => [styles.navCard, { opacity: pressed ? 0.9 : 1 }]}
+        >
+          <CalendarCheck size={30} color={colors.onBrandPrimary} weight="fill" />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.navTitle}>Activités & sorties</Text>
+            <Text style={styles.navSub}>Programmez piscine, marché… avec confirmation de Mamie</Text>
+          </View>
+        </Pressable>
+
+        {/* Photo de contrôle */}
+        <View style={styles.photoCard} testID="photo-card">
+          <View style={styles.photoHeader}>
+            <Text style={styles.photoTitle}>Photo de contrôle</Text>
+            <Pressable testID="request-photo" onPress={askPhoto} style={styles.photoBtn}>
+              <Camera size={20} color={colors.onBrandPrimary} weight="fill" />
+              <Text style={styles.photoBtnText}>Demander</Text>
+            </Pressable>
+          </View>
+          {photoPending ? (
+            <Text style={styles.photoHint}>En attente que Mamie prenne la photo…</Text>
+          ) : latestPhoto ? (
+            <Image
+              testID="latest-photo"
+              source={photoUrl(latestPhoto.id)}
+              style={styles.photo}
+              contentFit="cover"
+              transition={300}
+            />
+          ) : (
+            <Text style={styles.photoHint}>Aucune photo pour l'instant. Appuyez sur « Demander ».</Text>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -121,4 +179,29 @@ const useStyles = makeStyles((colors) => ({
   },
   tileLabel: { fontFamily: fonts.text, fontSize: sizes.base, color: colors.muted, marginTop: spacing.xs },
   tileValue: { fontFamily: fonts.textBold, fontSize: sizes.lg, color: colors.onSurface },
+  navCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.brandPrimary,
+    borderRadius: 20,
+    padding: spacing.lg,
+  },
+  navTitle: { fontFamily: fonts.displaySemi, fontSize: sizes.xl, color: colors.onBrandPrimary },
+  navSub: { fontFamily: fonts.text, fontSize: sizes.base, color: colors.onBrandPrimary, opacity: 0.85 },
+  photoCard: { backgroundColor: colors.surfaceSecondary, borderRadius: 20, padding: spacing.lg, gap: spacing.md },
+  photoHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  photoTitle: { fontFamily: fonts.displaySemi, fontSize: sizes.xl, color: colors.onSurface },
+  photoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.brandPrimary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+  },
+  photoBtnText: { fontFamily: fonts.textBold, fontSize: sizes.base, color: colors.onBrandPrimary },
+  photoHint: { fontFamily: fonts.text, fontSize: sizes.lg, color: colors.muted },
+  photo: { width: "100%", height: 260, borderRadius: 16, backgroundColor: colors.surfaceTertiary },
 }));

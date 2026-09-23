@@ -1,8 +1,9 @@
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Linking, Platform, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowClockwise, MapPin } from "phosphor-react-native";
+import { ArrowClockwise, MapPin, Phone } from "phosphor-react-native";
 
-import { useLatestLocation } from "@/src/api";
+import { useConfig, useLatestLocation } from "@/src/api";
+import { useToast } from "@/src/components/Toast";
 import { DashboardHeader } from "@/src/components/DashboardHeader";
 import { LeafletMap } from "@/src/components/LeafletMap";
 import { usesNativeTabs } from "@/src/navigation";
@@ -14,7 +15,22 @@ export default function LiveMap() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { data, isLoading, refetch, isRefetching } = useLatestLocation();
+  const { data: config } = useConfig();
+  const toast = useToast();
   const bottomChrome = usesNativeTabs ? insets.bottom : 0;
+
+  const callMamie = () => {
+    const num = config?.mamie_phone?.trim();
+    if (!num) {
+      toast("Ajoutez le numéro de Mamie dans Réglages", "error");
+      return;
+    }
+    if (Platform.OS === "web") {
+      toast(`Appeler Mamie : ${num}`, "info");
+      return;
+    }
+    Linking.openURL(`tel:${num}`).catch(() => {});
+  };
 
   const hasLoc = data && data.lat != null && data.lng != null;
 
@@ -24,9 +40,14 @@ export default function LiveMap() {
         title="Position"
         subtitle="Dernière localisation connue"
         right={
-          <Pressable testID="map-refresh" onPress={() => refetch()} style={styles.refreshBtn}>
-            <ArrowClockwise size={22} color={colors.onBrandPrimary} weight="bold" />
-          </Pressable>
+          <View style={styles.headerActions}>
+            <Pressable testID="map-call-mamie" onPress={callMamie} style={styles.callBtn}>
+              <Phone size={22} color={colors.onSuccess} weight="fill" />
+            </Pressable>
+            <Pressable testID="map-refresh" onPress={() => refetch()} style={styles.refreshBtn}>
+              <ArrowClockwise size={22} color={colors.onBrandPrimary} weight="bold" />
+            </Pressable>
+          </View>
         }
       />
 
@@ -82,6 +103,15 @@ const useStyles = makeStyles((colors) => ({
     height: 44,
     borderRadius: 999,
     backgroundColor: colors.brandPrimary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerActions: { flexDirection: "row", gap: spacing.sm },
+  callBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    backgroundColor: colors.success,
     alignItems: "center",
     justifyContent: "center",
   },
