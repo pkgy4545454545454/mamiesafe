@@ -1,0 +1,167 @@
+{
+  "app_name": "MamieSafe",
+  "personality": "4 Tactile / Playful LIGHT",
+  "personality_one_liner": "Warm, deeply reassuring, and ultra-tactile interface prioritizing high-contrast legibility and physical ease of use for seniors.",
+  "color": {
+    "surface": "#FFFBF7",
+    "onSurface": "#1C1917",
+    "surfaceSecondary": "#F5F0E6",
+    "onSurfaceSecondary": "#1C1917",
+    "surfaceTertiary": "#EAE4D9",
+    "onSurfaceTertiary": "#1C1917",
+    "surfaceInverse": "#1C1917",
+    "onSurfaceInverse": "#FFFBF7",
+    "brand": "#0F766E",
+    "brandPrimary": "#0F766E",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#F59E0B",
+    "onBrandSecondary": "#1C1917",
+    "brandTertiary": "#CCFBF1",
+    "onBrandTertiary": "#0F766E",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#1C1917",
+    "error": "#DC2626",
+    "onError": "#FFFFFF",
+    "info": "#2563EB",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E7EB",
+    "borderStrong": "#1C1917",
+    "divider": "#E5E7EB",
+    "muted": "#57534E",
+    "onBrand": "#FFFFFF"
+  },
+  "typography": {
+    "displayFontFamily": "Figtree",
+    "textFontFamily": "Nunito",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous touch targets. Mamie mode uses maximum available spacing; Dashboard uses standard comfortable rhythms.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "2",
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": false,
+    "do's": [],
+    "dont's": ["Do not use glass in Mamie mode to avoid visual confusion", "Avoid glass on Caregiver dashboard to maintain high contrast for medical data"]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "OnboardingTutorial",
+      "purpose": "Forced first-launch tutorial for the grandmother, teaching the two giant buttons with test examples and voice hints.",
+      "states": {
+        "loading": "Centered large spinner with text 'Chargement...'",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full screen stack layout. Single large illustration (elderly woman) at the top, minimal descriptive text (xl or 2xl size), and a single massive 'Test SOS' button to advance."
+    },
+    {
+      "name": "MamieHome",
+      "purpose": "The ultimate simplified home screen for the grandmother, featuring only a passive status indicator and two giant buttons: 'SOS' and 'Je me couche'.",
+      "states": {
+        "loading": "N/A",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "No navigation bar. A minimal header for 'status: listening'. The screen is split vertically into two massive flex-1 Pressables. Top is 'Je me couche' (Success/Mint colored, soft radius), bottom is 'SOS' (Error/Red colored, pill or heavy radius). Both buttons use 2xl text and extremely large icons."
+    },
+    {
+      "name": "DashboardStatus",
+      "purpose": "Caregiver monitoring interface showing last check-in, current status, and quick vitals.",
+      "states": {
+        "loading": "Standard spinner with 'Syncing status...'",
+        "empty": "N/A",
+        "error": "Card showing 'Connection lost' and a 'Retry' button."
+      },
+      "layout": "Bottom tabs navigation. Top card shows Mamie's status (OK/Warning/Danger). Below, a grid of vital cards (fall detection active, sound level). Uses standard Tactile personality with rounded cards and clear iconography."
+    },
+    {
+      "name": "AlertHistory",
+      "purpose": "Timeline view of past alerts categorized by severity (Léger, Moyen, Dangereux).",
+      "states": {
+        "loading": "Skeleton rows of timeline events.",
+        "empty": "Illustration of a calm setting with 'Aucune alerte récente'.",
+        "error": "Error message with 'Retry' button."
+      },
+      "layout": "List view. Each row features a severity badge (Green/Yellow/Orange/Red), timestamp, and a brief description. High contrast, large hit areas."
+    },
+    {
+      "name": "LiveMap",
+      "purpose": "Map view showing grandmother's live GPS position.",
+      "states": {
+        "loading": "Skeleton map box.",
+        "empty": "N/A",
+        "error": "Map unavailable error."
+      },
+      "layout": "Full bleed map view with a floating bottom sheet containing location metadata (address, last updated) and a quick 'Call Mamie' FAB."
+    },
+    {
+      "name": "SettingsContacts",
+      "purpose": "Caregiver settings to manage emergency contacts and device preferences.",
+      "states": {
+        "loading": "Spinner.",
+        "empty": "Add contact button centered.",
+        "error": "N/A"
+      },
+      "layout": "Standard list of settings rows with tactile rounded icons. A 'Switch to Mamie Mode' button (PIN protected)."
+    }
+  ],
+  "images": {
+    "onboarding_hero": {
+      "url": "https://images.pexels.com/photos/5257621/pexels-photo-5257621.jpeg",
+      "alt": "Elderly woman smiling warmly in a light apartment"
+    },
+    "map_pin_placeholder": {
+      "url": "https://images.pexels.com/photos/17562861/pexels-photo-17562861.jpeg",
+      "alt": "Map highlighting a location with a pin"
+    },
+    "empty_state_alerts": {
+      "url": "https://images.pexels.com/photos/27921847/pexels-photo-27921847.jpeg",
+      "alt": "Two elderly women sharing a joyful, warm moment"
+    }
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: The app has two entirely different modes. Mamie Mode must feel like a specialized, simplified device, not a standard app. No tab bars, no small settings icons in Mamie Mode.",
+    "For Mamie Mode, use `flex: 1` for the two main buttons ('Je me couche', 'SOS') so they fill the entire screen space dynamically. Text size must be strictly `2xl` but icons can be scaled up dramatically (e.g., 64px or 80px).",
+    "Use Haptics extensively. A short haptic pop when 'Je me couche' is pressed, and a heavy/long haptic vibration when 'SOS' is held or pressed.",
+    "In Caregiver Dashboard, strictly map the alert severities to the provided colors: Léger = warning (Amber), Moyen = brandSecondary (Orange-ish Amber), Dangereux = error (Red).",
+    "Apply the Tactile personality (4): chunky cards, oversized tap targets, and highly controlled contrast. The background is a warm cream (#FFFBF7), keeping the app feeling human and reassuring, rather than clinical.",
+    "Ensure the transition from Caregiver Dashboard to Mamie Mode locks the interface (mock the PIN entry logic if necessary).",
+    "Do NOT use glassmorphism anywhere in this app. The grandmother needs solid, unambiguous backgrounds for legibility, and the caregiver needs high-contrast data."
+  ]
+}
